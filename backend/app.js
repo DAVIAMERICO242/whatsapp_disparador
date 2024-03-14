@@ -4,9 +4,16 @@ const session = require('express-session');
 const {router} = require('./routes')
 const cors = require('cors'); // Import the CORS middleware
 var cookies = require("cookie-parser");
+
+//REQUER TABELA disparos com moment,user,campaign, truthy_connection, target number
+//REQUER TABELA users com user,pass,tel,email
+
 require('dotenv').config();
 
 app.use(cookies());
+
+app.use(bodyParser.json({ limit: '200mb' }));
+app.use(bodyParser.urlencoded({ limit: '200mb', extended: true }));
 
 app.use(cors({
     origin: `http://localhost:${process.env.FRONTEND_PORT}`,

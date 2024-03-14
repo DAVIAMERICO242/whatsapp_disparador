@@ -1,9 +1,101 @@
 const router = require('express').Router()
 const mysql = require('mysql');
 const jwt = require('jsonwebtoken');
-const {genQRCode,WppConnections, isWppConnected, WppDeleteConnection} = require('./whatsapp')
+const {doDisparoWhatsapp, genQRCode,WppConnections, isWppConnected, WppDeleteConnection, sendMessage, getWhatsappContacts} = require('./whatsapp')
+const {Campaigns} = require('./manage_database_disparo')
 const secretKey = 'yJNIDJ8329D0'; // Change this to a secure random key
 require('dotenv').config();
+
+// router.get('/contacts', async (req,res)=>{
+//   console.log('GET CONTACTS')
+//   const token = req?.headers['token'];
+//   if(!token){
+//     console.log('ERRO NO TOKEN')
+//     res.status(400).end()
+//     return
+//   }
+
+
+// })
+
+router.get('/campaigns', async (req,res)=>{
+  const token = req?.headers['token'];
+  if(!token){
+    console.log('TOKEN NAO ENCONTRADO');
+    res.status(400).end();
+    return;
+  }
+
+  const decoded = jwt.verify(token, secretKey);
+  const user_name = decoded.username;
+
+  const campaigns = await Campaigns(user_name);
+  console.log('CAMPAIGN NAME')
+  console.log(campaigns);
+  res.status(200).send(campaigns);
+})
+
+router.get('/is_wpp_connected', async (req,res)=>{
+  const token = req?.headers['token'];
+  if(!token){
+    console.log('TOKEN NAO ENCONTRADO')
+    res.status(400).end()
+    return
+  }
+  const {connection_name} = req.query
+  console.log('NOME DA CONEXÃO')
+  console.log(connection_name)
+  if(!connection_name){
+    res.status(400).end()
+    return
+  }
+  const decoded = jwt.verify(token, secretKey);
+  const user_name = decoded.username;
+  try{
+    const response = await isWppConnected(connection_name, user_name)
+    console.log('STATUS DA CONEXÃO ENDPOINT')
+    console.log(response)
+    res.status(200).send(response)
+  }catch(error){
+    console.log(error)
+    return
+  }
+  
+})
+
+router.post('/disparo', async (req,res)=>{
+  console.log('DISPARO TRIGADO')
+  const token = req?.headers['token'];
+  if(!token){
+    console.log('ERRO NO TOKEN')
+    res.status(400).end()
+    return
+  }
+
+  const {connection_name} = req.body;
+  const decoded = jwt.verify(token, secretKey);
+  const user_name = decoded.username;
+  try{
+      const contacts = await getWhatsappContacts(connection_name, user_name);
+      const {message} = req.body;
+      const {image_base64} = req.body;
+      var {campaign_name} = req.body;
+      var campaign_name = campaign_name?.replace(/\s+/g, ' ').trim();
+      var {unfilter_how_many_to_disparo} = req.body;
+      var {campaign_to_exclude} = req.body;
+      var {interval_between_disparo} = req.body;
+      if(!(connection_name||decoded||user_name||target_phone||message||campaign_name||unfilter_how_many_to_disparo||campaign_to_exclude||interval_between_disparo)){
+        res.status(400).end();
+        return;
+      }
+      doDisparoWhatsapp(contacts,user_name, connection_name, campaign_name, message, image_base64, campaign_to_exclude, parseInt(unfilter_how_many_to_disparo), interval_between_disparo, token);
+      res.status(200).end();
+
+  }catch(error){
+    console.log(error)
+  }
+
+})
 
 router.post('/delete_connection', async (req,res)=>{
   console.log('DELETE CONNECTION TRIGGERED')
@@ -178,61 +270,6 @@ router.get('/private_route', (req,res)=>{
     }
 })
 
-router.post('/disparo', (req, res) => {
-  console.log(req.headers);
-  const token = req?.headers['token'];
-  if (!token) {
-      console.log('USUARIO DISPARO NAO AUTORIZADO');
-      res.status(404).send('NAO AUTORIZADO');
-      return
-  } else {
-      jwt.verify(token, secretKey, (err, decoded) => {
-          if (err) {
-              console.log('USUARIO DISPARO NAO AUTORIZADO (PROVAVEL TOKEN EXPIRADO)');
-              return res.status(403).end();
-          } else {
-              var {username} = decoded;
-              var {campaign_name} = req.body;
-              var campaign_name = campaign_name.replace(/\s+/g, ' ').trim()
-              var {connection_name} = req.body;
-              var {unfilter_how_many_to_disparo} = req.body;
-              var {campaign_to_exclude} = req.body;
-              var {interval_between_disparo} = req.body;
-              var {message} = req.body;
-              var {image} = req.body;
-
-              console.log('USUARIO AUTORIZADO PARA DISPARO');
-              console.log(`Usuário que solicitou o disparo:${username}`)
-              console.log(`Nome da campanha: ${campaign_name}}`);
-              console.log(`Conexão escolhida: ${connection_name}`);
-              console.log(`Número de contatos a serem disparados (sem filtrar campanha): ${unfilter_how_many_to_disparo}`);
-              console.log(`Campanha excluída: ${campaign_to_exclude}`);
-              console.log(`Intervalo entre cada disparo: ${interval_between_disparo}`);
-              console.log(`Mensagem a ser disparada: ${message}`);
-              console.log(`Imagem a ser disparada: ${image}`);
-
-              const connection = mysql.createConnection({
-                host: process.env.DATABASE_HOST,
-                port: process.env.DATABASE_PORT,
-                user: process.env.DATABASE_USER,
-                password: process.env.DATABASE_PASS,
-                database: process.env.DATABASE_NAME
-              });
-
-              connection.connect((err) => {
-                if (err) {
-                  console.error('Error connecting to database:', err);
-                  res.status(440).end();
-                  return;
-                }else{
-                  console.log('Banco de dados conectado com sucesso')
-                  //procurando números do usuário (pausei pq agora é com qr code affffffffffffffffffffffff)
-                }
-              })
-          }
-      });
-  }
-});
   
 module.exports={
     router

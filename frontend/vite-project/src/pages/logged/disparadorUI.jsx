@@ -12,15 +12,72 @@ import Slider from '@mui/material/Slider';
 import { HiQuestionMarkCircle } from "react-icons/hi2";
 import Tooltip from '@mui/material/Tooltip';
 import axios from 'axios'
-
+import LinearProgress from '@mui/material/LinearProgress';
+import Typography from '@mui/material/Typography';
+import Box from '@mui/material/Box';
 
 
 
 
 export const DisparadorUI = () => {
 
+  const [historicConnections, setHistoricConnections] = useState(null)
+
+    useEffect(()=>{
+      console.log('use effect triggerado no pai')
+      const get_connections = async()=>{
+        try{
+          const token = localStorage.getItem('token');
+          const response_connections = await axios.get('http://127.0.0.1:3050/connections',{
+            headers: {
+              'token': `${token}`,
+              'Content-Type': 'application/json'
+          }
+          })
+    
+          const user_connections = response_connections.data;
+          if(user_connections){
+            setHistoricConnections(user_connections)
+          }else{
+            setHistoricConnections(false)
+          }
+          console.log(user_connections);
+        }catch(error){
+          console.log(error)
+        }
+      }
+      get_connections()
+    },[]);
+
+    const [historicCampaigns, setHistoricCampaigns] = useState(null)
+
+    useEffect(()=>{
+      console.log('use effect triggerado no pai campanha')
+      const get_campaigns = async()=>{
+        try{
+          const token = localStorage.getItem('token');
+          const response_campaigns = await axios.get('http://127.0.0.1:3050/campaigns',{
+            headers: {
+              'token': `${token}`,
+              'Content-Type': 'application/json'
+          }
+          })
+    
+          const user_campaigns = response_campaigns.data;
+          if(user_campaigns){
+            setHistoricCampaigns(user_campaigns)
+          }else{
+            setHistoricCampaigns(false)
+          }
+          console.log(user_campaigns);
+        }catch(error){
+          console.log(error)
+        }
+      }
+      get_campaigns()
+    },[]);
+
     //pegando dados de campanhas e connexões
-    const user_db_connections = ['a']
     const user_db_past_campaigns = ['Campaign 1', 'Campaign 2', 'Campaign 3']
     user_db_past_campaigns.unshift('Não quero restringir a nível de campanha')
 
@@ -42,6 +99,19 @@ export const DisparadorUI = () => {
     //salvando a mensagem no componente pai:
     const handleImageFile = (val)=>{
       setImage(val)
+      if(val){
+        fileToBase64(val)
+      }
+    }
+
+    function fileToBase64(file) {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const base64String = reader.result;
+        console.log(base64String); // Here's the base64 representation of the file
+        setImage(base64String);
+      };
     }
   
     //manipular o state da mensagem é um pouco mais complexo:
@@ -162,9 +232,14 @@ export const DisparadorUI = () => {
     }
     ]
 
+    const [isDisparing, setIsDisparing] = useState(null);
+
     const Disparo = async () => {
+      console.log('IMAGEM DA HORA DO DISPARO 64')
+      console.log(image)
       try {
           const token = localStorage.getItem('token');
+          setIsDisparing(true);
           await axios.post('http://127.0.0.1:3050/disparo', {
               campaign_name: campaign,
               connection_name: connection,
@@ -172,22 +247,53 @@ export const DisparadorUI = () => {
               campaign_to_exclude: restrictedCampaign,
               interval_between_disparo: intervalValue,
               message: MessageInParentComponent,
-              image: image
+              image_base64: image
           }, {
-              withCredentials: true,
               headers: {
                   'token': `${token}`,
                   'Content-Type': 'application/json'
               }
           });
       } catch (error) {
+          setIsDisparing(false);
           console.log(error);
       }
     };
 
+    const [disparoProgress, setDisparoProgress] = useState(null);
+    useEffect(() => {
+      console.log('IS DISPARING CHECK')
+      console.log(isDisparing)
+      const token = localStorage.getItem('token');
+      const ws = new WebSocket('ws://localhost:8500'); // Connect to WebSocket server
+  
+      ws.onopen = () => {
+        console.log('WebSocket connection established');
+      };
+  
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if(token===data.web_socket_user){
+          console.log('Received data:', data);
+          setDisparoProgress(data.disparo_progress);
+          console.log('DISPARO PROGRESS')
+          console.log(disparoProgress)
+          if(parseInt((data?.disparo_progress)?.split('/')[0]) === parseInt((data?.disparo_progress)?.split('/')[1])){
+            setIsDisparing(false);
+            setDisparoProgress(null);
+          }
+        }
+        // Handle received data, update state, etc.
+      };
+  
+      return () => {
+        ws.close(); // Close WebSocket connection when component unmounts
+      };
+    }, [isDisparing, disparoProgress]);
+
 
     return(
-            <div>
+            <div className={isDisparing?'disparing':''}>
               <div className="generic_painel_label">Escolha um nome para esse disparo</div>
               <TextField size="small" onChange={(e)=>handleCampaignChange(e)} label="Nome da campanha" className="generic_painel_input"/>
               {isCampaignValid===false?(<div id="invalid_field">Nome da campanha inválido</div>):null}
@@ -200,9 +306,15 @@ export const DisparadorUI = () => {
                 displayEmpty
                 inputProps={{ 'aria-label': 'Without label' }}
               >
-                {!(user_db_connections.length)?(<MenuItem value="">
+                {(historicConnections!==null)?(!historicConnections?(<MenuItem value="">
                   <em>Nenhuma conexão encontrada</em>
-                </MenuItem>):(user_db_connections.map((e,i)=>(<MenuItem key={i} value={e}>{e}</MenuItem>)))}
+                </MenuItem>):(
+                    historicConnections.map((con,indexx)=>(
+                      <MenuItem key={indexx} value={con}><em>{con}</em></MenuItem>
+                    ))
+                    // <MenuItem value={20}>Conexão 2</MenuItem>
+                    // <MenuItem value={30}>Conexão 3</MenuItem>
+                )):(null)}
               </Select>
               <div id="divider"></div>
               <div className="generic_painel_label">Escolha o número de contatos:</div>
@@ -228,7 +340,15 @@ export const DisparadorUI = () => {
                 displayEmpty
                 inputProps={{ 'aria-label': 'Without label' }}
               >
-                ({user_db_past_campaigns.map((e,i)=>(<MenuItem key={i} value={e}>{e}</MenuItem>))})
+                {(historicCampaigns!==null)?(!historicCampaigns?(<MenuItem value="">
+                  <em>Nenhuma campanha encontrada</em>
+                </MenuItem>):(
+                    ['Não restringir',...historicCampaigns].map((chan,indexx)=>(
+                      !indexx?(<MenuItem key={indexx} value={'DENY_RESTRICT'}><em>Não restringir</em></MenuItem>):(<MenuItem key={indexx} value={chan}><em>{chan}</em></MenuItem>)
+                    ))
+                    // <MenuItem value={20}>Conexão 2</MenuItem>
+                    // <MenuItem value={30}>Conexão 3</MenuItem>
+                )):(null)}
               </Select>
                 <div id="divider"></div>
                 <div id="label_set_interval_container">
@@ -239,10 +359,21 @@ export const DisparadorUI = () => {
                     </div>
                   </Tooltip>
                 </div>
-                <Slider onChange={handleIntervalChange} marks={marks} defaultValue={5} aria-label="Default" valueLabelDisplay="auto" min={5} max={20}/>
+                <Slider onChange={handleIntervalChange} marks={marks} defaultValue={8} aria-label="Default" valueLabelDisplay="auto" min={8} max={20}/>
                 <button id="set_message" onClick={openConfigMessageDialog}><TbMessageCircleCog id="set_message_icon"/><div>Escrever mensagem</div></button>
                 <SetMessageUI handleImageFile={handleImageFile} handleMessageValue={handleMessageValue} isConfigMessageDialogOpen={isConfigMessageDialogOpen} closeConfigMessageDialog={closeConfigMessageDialog}/>
                 <button id="disparar_button" ref={refDisparo} onClick={Disparo}><IoIosSend id="aviao"/><div>Enviar</div></button>
+                {isDisparing?(<Box id="disparo_progress" sx={{ width: '100%' }}>
+                    <div id="disparo_progress_label">Disparando: {disparoProgress}</div>
+                    <LinearProgress color="inherit" value={20}         sx={{
+                    '& .MuiLinearProgress-bar': {
+                        backgroundColor: 'rgba(0, 255, 0, 0.8)' // Green color with 50% opacity
+                    },
+                    '& .MuiLinearProgress-bar1Determinate': {
+                        backgroundColor: 'green' // Floating progress color remains unchanged
+                    }
+                }} />
+                </Box>):null}
                 <ToastContainer />
             </div>
     

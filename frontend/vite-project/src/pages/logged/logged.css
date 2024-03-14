@@ -453,3 +453,21 @@
     opacity: 0.5;
     pointer-events: none;
 }
+
+.disparing{
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+#disparo_progress{
+    margin-top: 10px;
+}
+
+#disparo_progress_label{
+    font-size: 12px;
+    margin-bottom: 5px;
+}
+.{
+    background-color: rgb(148, 238, 148,0.8);
+
+}
