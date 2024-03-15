@@ -1,13 +1,18 @@
-import { useState} from 'react';
+import { useState, useRef, useEffect} from 'react';
 import './logged.css';
 import FormControl from '@mui/material/FormControl';
 import { DisparadorUI } from './DisparadorUI';
 import { ConexoesUI } from './ConexoesUI'; // Make sure ConexoesUI is properly imported
 import { ImExit } from "react-icons/im";
-
+import CircularProgress from '@mui/material/CircularProgress';
 
 export const PainelUI = () => {
   const [focusedButton, setFocusedButton] = useState('disparador');
+  const painelRef = useRef();
+
+
+
+
 
 
   const focusUI = (e, name) => {
@@ -27,8 +32,8 @@ export const PainelUI = () => {
 
   return (
     <div id="painel">
-      <form action="#" id="painel_form" onSubmit={(e)=>{e.preventDefault()}}>
-        <FormControl sx={{ m: 1, minWidth: 120 }} size="small">
+      <form action="#" id="painel_form" ref={painelRef} onSubmit={(e)=>{e.preventDefault()}}>
+        <FormControl  sx={{ m: 1, minWidth: 120 }} size="small">
           <div id="nav_container">
             <button
               href="#"
@@ -47,7 +52,7 @@ export const PainelUI = () => {
             {focusedButton === 'disparador'?<button id="logout" onClick={(e)=>KillToken(e)}>Sair <ImExit/></button>:''}
           </div>
           {focusedButton === 'disparador' ? (
-            <DisparadorUI  />
+            <DisparadorUI />
           ) : (
             <ConexoesUI />
           )}

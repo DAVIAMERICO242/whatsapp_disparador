@@ -15,11 +15,96 @@ import axios from 'axios'
 import LinearProgress from '@mui/material/LinearProgress';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
+import { HiOutlineDocumentReport } from "react-icons/hi";
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogContentText from '@mui/material/DialogContentText';
+import DialogTitle from '@mui/material/DialogTitle';
+import { GoCheckCircleFill } from "react-icons/go";
+import CircularProgress from '@mui/material/CircularProgress';
+
 
 
 
 
 export const DisparadorUI = () => {
+  const [isDisparing, setIsDisparing] = useState(null);
+  // localStorage.setItem('isDisparing',isDisparing); tem que ta fora mesmo kkk
+  const [disparoProgress, setDisparoProgress] = useState('-/-');
+  const [fails, setFails] = useState(0);
+  const [success, setSuccess] = useState(null);
+  const [totalDispared, setTotalDispared] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [stoped, setStoped] = useState(false);//SEM LOCALSTORAGE
+  // localStorage.setItem('paused',paused); tem que ta fora mesmo kkk
+
+
+  useEffect(() => {
+    console.log('STATE DE STOPED');
+    console.log(stoped)
+    console.log('IS DISPARING CHECK')
+    console.log(isDisparing)
+    // localStorage.setItem('isDisparing',isDisparing)
+    const user = localStorage.getItem('user');
+    const ws = new WebSocket(`ws://localhost:8500?user=${user}`); // Connect to WebSocket server
+    console.log('PAUSE STATE')
+    console.log(paused)
+    ws.onopen = () => {
+      console.log('WebSocket connection established');
+      if(paused){
+        ws.send('pause');
+      }else{
+        ws.send('unpause')
+      }
+      if(stoped){
+        console.log('FRONTEND REALMENTE BUGOU')
+        ws.send('stop');
+      }
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log('O WEB SOCKET ENVIOU OS SEGUINTES DADOS');
+      console.log(data);
+      if(data.falhas){
+        setFails(data.falhas);
+      }
+      console.log('Received data:', data);
+      setDisparoProgress(data.disparo_progress);
+      console.log('DISPARO PROGRESS')
+      console.log(disparoProgress)
+      if(parseInt((data?.disparo_progress)?.split('/')[0]) === parseInt((data?.disparo_progress)?.split('/')[1])){
+        setIsDisparing(false);
+        setTotalDispared(parseInt((data?.disparo_progress)?.split('/')[0]))
+        localStorage.setItem('isDisparing',false);
+        setDisparoProgress('-/-');
+        setFails(0);
+        setSuccess(true);
+        setPaused(false);
+        setStoped(false);
+      }else if(!(data.stoped)){
+        setIsDisparing(true);
+        localStorage.setItem('isDisparing',true);
+        console.log('PROGRESSO RECUPERARO')
+        console.log(data?.disparo_progress)
+      }else if(data.stoped===true){
+        setIsDisparing(false);
+        setTotalDispared(parseInt((data?.disparo_progress)?.split('/')[0]))
+        localStorage.setItem('isDisparing',false);
+        setDisparoProgress('-/-');
+        setFails(0);
+        setSuccess(true);
+        setPaused(false);
+        setStoped(false);
+      }
+    };
+
+    return () => {
+      ws.close(); // Close WebSocket connection when component unmounts
+    };
+  }, [isDisparing, disparoProgress, fails, paused, stoped]);
+
 
   const [historicConnections, setHistoricConnections] = useState(null)
 
@@ -94,7 +179,7 @@ export const DisparadorUI = () => {
     const [MessageInParentComponent, setMessageInParentComponent] = useState('');
     const [isMessageValid, setIsMessageValid] = useState(false);
     const [image, setImage] = useState(null);
-    const [intervalValue, setIntervalValue] = useState(5);
+    const [intervalValue, setIntervalValue] = useState(8);
 
     //salvando a mensagem no componente pai:
     const handleImageFile = (val)=>{
@@ -232,7 +317,6 @@ export const DisparadorUI = () => {
     }
     ]
 
-    const [isDisparing, setIsDisparing] = useState(null);
 
     const Disparo = async () => {
       console.log('IMAGEM DA HORA DO DISPARO 64')
@@ -240,6 +324,7 @@ export const DisparadorUI = () => {
       try {
           const token = localStorage.getItem('token');
           setIsDisparing(true);
+          localStorage.setItem('isDisparing',true);
           await axios.post('http://127.0.0.1:3050/disparo', {
               campaign_name: campaign,
               connection_name: connection,
@@ -256,44 +341,52 @@ export const DisparadorUI = () => {
           });
       } catch (error) {
           setIsDisparing(false);
+          localStorage.setItem('isDisparing',false);
           console.log(error);
       }
     };
 
-    const [disparoProgress, setDisparoProgress] = useState(null);
+    const [successDialogOpen, setSuccessDialogOpen] = useState(true);
+
+
+    const openSuccessDialog = (e)=>{
+      e?.preventDefault();
+      setSuccessDialogOpen(true);
+
+    }
+  
+    const closeSuccessDialog = (e)=>{
+      console.log('DIALOGO FECHADO')
+      e?.preventDefault();
+      setSuccessDialogOpen(false);
+      setSuccess(false);
+    }
+
     useEffect(() => {
-      console.log('IS DISPARING CHECK')
-      console.log(isDisparing)
-      const token = localStorage.getItem('token');
-      const ws = new WebSocket('ws://localhost:8500'); // Connect to WebSocket server
+      if (success) {
+        openSuccessDialog(); // Open the dialog whenever success becomes true
+      }
+    }, [success, stoped]);
+
+
+
+    const [acompanharDialogOpen, setAcompanharDialogOpen] = useState(true);
+
+    const openAcompanharDialog = (e)=>{
+      e?.preventDefault()
+      setAcompanharDialogOpen(true)
+    }
   
-      ws.onopen = () => {
-        console.log('WebSocket connection established');
-      };
-  
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if(token===data.web_socket_user){
-          console.log('Received data:', data);
-          setDisparoProgress(data.disparo_progress);
-          console.log('DISPARO PROGRESS')
-          console.log(disparoProgress)
-          if(parseInt((data?.disparo_progress)?.split('/')[0]) === parseInt((data?.disparo_progress)?.split('/')[1])){
-            setIsDisparing(false);
-            setDisparoProgress(null);
-          }
-        }
-        // Handle received data, update state, etc.
-      };
-  
-      return () => {
-        ws.close(); // Close WebSocket connection when component unmounts
-      };
-    }, [isDisparing, disparoProgress]);
+    const closeAcompanharDialog = (e)=>{
+      e?.preventDefault()
+      if(!isDisparing && !(localStorage.getItem('isDisparing')==='true')){
+        setAcompanharDialogOpen(false)
+      }
+    }
 
 
     return(
-            <div className={isDisparing?'disparing':''}>
+            <div className={(isDisparing||(localStorage.getItem('isDisparing')==='true'))?'disparing':''}>
               <div className="generic_painel_label">Escolha um nome para esse disparo</div>
               <TextField size="small" onChange={(e)=>handleCampaignChange(e)} label="Nome da campanha" className="generic_painel_input"/>
               {isCampaignValid===false?(<div id="invalid_field">Nome da campanha inválido</div>):null}
@@ -363,18 +456,64 @@ export const DisparadorUI = () => {
                 <button id="set_message" onClick={openConfigMessageDialog}><TbMessageCircleCog id="set_message_icon"/><div>Escrever mensagem</div></button>
                 <SetMessageUI handleImageFile={handleImageFile} handleMessageValue={handleMessageValue} isConfigMessageDialogOpen={isConfigMessageDialogOpen} closeConfigMessageDialog={closeConfigMessageDialog}/>
                 <button id="disparar_button" ref={refDisparo} onClick={Disparo}><IoIosSend id="aviao"/><div>Enviar</div></button>
-                {isDisparing?(<Box id="disparo_progress" sx={{ width: '100%' }}>
-                    <div id="disparo_progress_label">Disparando: {disparoProgress}</div>
-                    <LinearProgress color="inherit" value={20}         sx={{
-                    '& .MuiLinearProgress-bar': {
-                        backgroundColor: 'rgba(0, 255, 0, 0.8)' // Green color with 50% opacity
+            {(isDisparing||localStorage.getItem('isDisparing')==='true')?(<Dialog
+                  open={acompanharDialogOpen}
+                  onClose={closeAcompanharDialog}
+                  PaperProps={{
+                    component: 'form',
+                    onSubmit: (event) => {
+                      event.preventDefault();
+                      const formData = new FormData(event.currentTarget);
+                      const formJson = Object.fromEntries(formData.entries());
+                      const email = formJson.email;
+                      console.log(email);
                     },
-                    '& .MuiLinearProgress-bar1Determinate': {
-                        backgroundColor: 'green' // Floating progress color remains unchanged
-                    }
-                }} />
-                </Box>):null}
-                <ToastContainer />
+                  }}>
+            <DialogTitle>{!paused?'Disparo em andamento':'Disparo pausado'}</DialogTitle>
+            <DialogContent>
+              <Box id="disparo_progress" sx={{ width: '100%' }}>
+                      <div id="disparo_progress_label">Sucesso: {disparoProgress}</div>
+                      <div id="falha">Falhas: {fails} </div>
+                      <LinearProgress id="aiai" color="inherit" value={20}         sx={{
+                      '& .MuiLinearProgress-bar': {
+                          backgroundColor: 'rgba(0, 255, 0, 0.8)' // Green color with 50% opacity
+                      },
+                      '& .MuiLinearProgress-bar1Determinate': {
+                          backgroundColor: 'green' // Floating progress color remains unchanged
+                      }
+                  }} />
+              </Box>
+            <button id="pausar" className={stoped?"pausar loading":""} onClick={()=>{setPaused((prev)=>!prev)}}>{paused?'Despausar':'Pausar'}</button>
+            {!stoped?(<button id="kill_disparo" onClick={()=>{setStoped((prev)=>!prev)}}>Parar disparo</button>):(<button id="kill_disparo" className="kill_disparo loading"><CircularProgress id="mini_circular_progress" color="inherit" /></button>)}
+            </DialogContent>
+            <DialogActions>
+            </DialogActions>
+        </Dialog>):null}
+
+        {success?(<Dialog
+                  open={successDialogOpen}
+                  onClose={closeSuccessDialog}
+                  PaperProps={{
+                    component: 'form',
+                    onSubmit: (event) => {
+                      event.preventDefault();
+                      const formData = new FormData(event.currentTarget);
+                      const formJson = Object.fromEntries(formData.entries());
+                      const email = formJson.email;
+                      console.log(email);
+                    },
+                  }}>
+            <div id="success">
+            <GoCheckCircleFill id="success_icon"/>
+            <DialogTitle id="succes_label">{`Disparo ${stoped?'cancelado':'concluído'} com sucesso!`}</DialogTitle>
+            </div>
+            <DialogContent>
+              <div>O número de contatos disparados foi {totalDispared}</div>
+            </DialogContent>
+            <DialogActions>
+            </DialogActions>
+        </Dialog>):null}
+        <ToastContainer />
             </div>
     
     )

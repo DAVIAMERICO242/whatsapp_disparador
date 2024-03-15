@@ -88,6 +88,7 @@ router.post('/disparo', async (req,res)=>{
         res.status(400).end();
         return;
       }
+      console.log('DISPARO PRESTES A SER TRIGADO')
       doDisparoWhatsapp(contacts,user_name, connection_name, campaign_name, message, image_base64, campaign_to_exclude, parseInt(unfilter_how_many_to_disparo), interval_between_disparo, token);
       res.status(200).end();
 

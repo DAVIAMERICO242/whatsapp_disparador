@@ -4,20 +4,79 @@ require('dotenv').config();
 const fetch = require('node-fetch');
 const {recordCampaignOnSentMessage, NumbersFromExcludedCampaign} = require('./manage_database_disparo');
 const WebSocket = require('ws'); // Assuming you're using WebSocket library
+const url = require('url');
 
+
+const LocalStorage = require('node-localstorage').LocalStorage;
+const localStorage = new LocalStorage('./scratch');
 const wss = new WebSocket.Server({ port: 8500 }); // Example port number
 
-function sendProgress(progress, token) {//progresso disparo
+wss.on('connection', function connection(ws, req) {
+  const location = url.parse(req.url, true);
+  console.log('LOCATION')
+  console.log(location)
+  const user = location.query.user;
+  console.log("USER:", user);
+  console.log('PARAMS')
+  console.log(req.user)
+  console.log('TOKEN DETECTADO NA CONEXÃO')
+  console.log(user)
+  ws.user = user; // Store token as a property of the WebSocket object
+
+  ws.on('message', function incoming(message) {
+
+    var progress_backup = localStorage.getItem(`${user}_progress`);
+    var user_name_backup = localStorage.getItem(`${user}_user_name`);
+    var fail_backup = localStorage.getItem(`${user}_fail`);
+
+    if (message === 'pause') {
+      console.log('PAUSE')
+      try{
+        localStorage.setItem(`${user}_pause_status`, 'paused');
+        console.log(localStorage.getItem(`${user}_pause_status`));
+      }catch(error){
+        console.log(error);
+      }
+    }
+    if (message === 'unpause') {
+      console.log('UNPAUSE')
+      try{
+        localStorage.setItem(`${user}_pause_status`, 'unpaused');
+      }catch(error){
+        console.log(error)
+      }
+    }
+
+    if(message === 'stop'){
+      console.log('SERVIDOR RECEBEU REQUISIÇÃO DE STOP');
+      sendProgress(progress_backup, user_name_backup, fail_backup, true);
+      try{
+        localStorage.setItem(`${user}_stop_status`, 'stop');
+      }catch(error){
+        console.log(error)
+      }
+    }
+  });
+
+  // Your other WebSocket handling logic...
+});
+
+function sendProgress(progress, user_name, fail, stoped) {//progresso disparo
+  localStorage.setItem(`${user_name}_progress`,progress);
+  localStorage.setItem(`${user_name}_user_name`,user_name);
+  localStorage.setItem(`${user_name}_fail`,fail);
   wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({ 'web_socket_user': token, 'disparo_progress': progress }));
+    console.log('USER DO CLIENTE')
+    console.log(client.user)
+    if (client.readyState === WebSocket.OPEN && client.user === user_name) {
+      client.send(JSON.stringify({ 'web_socket_user': user_name, 'disparo_progress': progress, 'falhas':fail, 'stoped': stoped }));
     }
   });
 }
 
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function randomAroundMean(mean, stdDev) {
@@ -120,6 +179,15 @@ const sendMessage = async(connection_name, user_name,target_phone,message, image
 const doDisparoWhatsapp = async (contacts,user_name, connection_name, campaign_name, message, image_base64, campaign_to_exclude, unfilter_how_many_to_disparo, interval_between_disparo, token)=>{
   
   try{
+      //backup
+      localStorage.setItem(`${user_name}_progress`,0);
+      localStorage.setItem(`${user_name}_user_name`,user_name);
+      localStorage.setItem(`${user_name}_fail`,0);
+      //backup^
+      localStorage.setItem(`${user_name}_stop_status`, 'unstoped');
+      localStorage.setItem(`${user_name}_pause_status`, 'unpaused');
+      console.log('LOCAL STORAGE NAO ATUALIZANDO');
+      console.log(localStorage.getItem(`${user_name}_stop_status`));
       console.log('ENTROU NA FUNÇÃO DISPARO');
       console.log(`Usuário que solicitou o disparo:${user_name}`)
       console.log(`Nome da campanha: ${campaign_name}}`);
@@ -164,11 +232,36 @@ const doDisparoWhatsapp = async (contacts,user_name, connection_name, campaign_n
       const iterateContacts = async () => {
         console.log('TA BIGADO?')
         console.log(unique_contacts.length)
+        var fail = 0;
         for (let index = 0; index < unique_contacts.length; index++) {
-          await sendMessage(connection_name, user_name, unique_contacts[index],message, image_base64);
+          while(localStorage.getItem(`${user_name}_pause_status`)==='paused'){
+            if(localStorage.getItem(`${user_name}_stop_status`)==='stop'){
+              console.log('DISPARO MORTO')
+              // sendProgress((index).toString() + '/' + (unique_contacts.length).toString(), user_name, true);
+              return;
+            }
+            console.log('USUARIO PAUSOU')
+            await sleep(3000);
+          }
+          if(localStorage.getItem(`${user_name}_stop_status`)==='stop'){
+            console.log('Disparo stopado');
+            // sendProgress((index).toString() + '/' + (unique_contacts.length).toString(), user_name, fail, true);
+            return;
+          }
+          try{
+            await sendMessage(connection_name, user_name, unique_contacts[index],message, image_base64);
+          }catch(error){
+            fail = fail + 1;
+            console.log('falhas')
+            console.log(fail);
+          }
+          sendProgress((index + 1).toString() + '/' + (unique_contacts.length).toString(), user_name, fail);
           await sleep(randomAroundMean(interval_between_disparo*1000,3000));
-          await recordCampaignOnSentMessage(user_name,connection_name, campaign_name, unique_contacts[index]);
-          sendProgress((index + 1).toString() + '/' + (unique_contacts.length).toString(), token);
+          try{
+            await recordCampaignOnSentMessage(user_name,connection_name, campaign_name, unique_contacts[index]);
+          }catch(error){
+            console.log(error)
+          }
         }
       }
       iterateContacts();

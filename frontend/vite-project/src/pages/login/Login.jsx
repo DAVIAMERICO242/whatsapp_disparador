@@ -35,6 +35,7 @@ export const Login = () => {
             const { token } = response.data;
             console.log(token)
             localStorage.setItem('token', token)
+            localStorage.setItem('user', user)
             console.log('autenticado')
             setTimeout(() => {
                 navigateTo('/painel')
